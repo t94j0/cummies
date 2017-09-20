@@ -4,7 +4,7 @@ import os, stat
 import json
 import hashlib
 import difflib
-import subprocess
+from subprocess import PIPE, Popen
 from time import sleep, ctime
 
 NEWFILE = " [File Created] "
@@ -15,6 +15,8 @@ ss_db = None
 
 def log(action, filename):
 	if action == RMFILE:
+		print("[" + ctime() + "]" + action + filename)
+	elif action == NETMOD:
 		print("[" + ctime() + "]" + action + filename)
 	else:
 		print("[" + str(ctime(os.path.getmtime(filename))) + "]" + action + filename)
@@ -76,9 +78,11 @@ def discover(directory):
 def ss(baseline=None):
 	global ss_db
 	if baseline is not None:
-		ss_db = subprocess.check_output("ss -tulpn", shell=True)
+		proc = Popen(['ss', '-tulpn'], stdout=PIPE)
+		ss_db = proc.communicate()[0]
 	else:
-		output = subprocess.check_output("ss -tulpn", shell=True)
+		proc = Popen(['ss', '-tulpn'], stdout=PIPE)
+		output = proc.communicate()[0]
 		for line in output.split(os.linesep):
 			if line not in ss_db.split(os.linesep):
 				log(NETMOD, ' '.join(line.split()))
@@ -99,3 +103,4 @@ while True:
 	for d in dirs:
 		compare(d)
 	ss()
+
