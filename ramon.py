@@ -40,14 +40,16 @@ def dict_compare(d1, d2):
 	intersect_keys = d1_keys.intersection(d2_keys)
 	added = d1_keys - d2_keys
 	removed = d2_keys - d1_keys
-	modified = {o : (d1[o], d2[o]) for o in intersect_keys if d1[o] != d2[o]}
-	same = set(o for o in intersect_keys if d1[o] == d2[o])
-	return added, removed, modified, same
+	modified = dict()
+	for o in intersect_keys:
+		if d1[o] != d2[o]:
+			modified[o] = (d1[o], d2[o])
+	return added, removed, modified
 
 def compare(directory):
 	dir_db = json.load(open(d.split("/")[-1] + ".db"))
 	temp_db = discover(directory)
-	added, removed, modified, same = dict_compare(temp_db, dir_db)
+	added, removed, modified = dict_compare(temp_db, dir_db)
 	if added:
 		for new_file in added:
 			log(NEWFILE, new_file)
