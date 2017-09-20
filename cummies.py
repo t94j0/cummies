@@ -21,6 +21,9 @@ def log(action, filename):
 	else:
 		print("[" + str(ctime(os.path.getmtime(filename))) + "]" + action + filename)
 
+def read_block(f, block_size):
+	return f.read(block_size)
+
 def sha256_checksum(filename, block_size=65536):
 	sha256 = hashlib.sha256()
 	try:
@@ -34,8 +37,10 @@ def sha256_checksum(filename, block_size=65536):
 		return None
 	try:
 		f = open(filename, 'rb')
-		for block in iter(lambda: f.read(block_size), b''):
-			sha256.update(block)
+		buf = f.read(block_size)
+		while len(buf) > 0:
+			sha256.update(buf)
+			buf = f.read(block_size)
 		return sha256.hexdigest()
 	except IOError:
 		print ("Could not read file:" + filename)
