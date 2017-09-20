@@ -1,41 +1,80 @@
-import os
-import hashlib
+#!/usr/bin/env python
 
-FILE_UNKNOWN = "FILE_UNKNOWN"
+import os, stat
+import json
+import hashlib
+from time import sleep, ctime
+
+NEWFILE = " [File Created] "
+RMFILE  = " [File Removed] "
+MDFILE  = " [File Modified] "
+
+def log(action, filename):
+	if action == RMFILE:
+		print("[" + ctime() + "]" + action + filename)
+	else:
+		print("[" + str(ctime(os.path.getmtime(filename))) + "]" + action + filename)
 
 def sha256_checksum(filename, block_size=65536):
-    sha256 = hashlib.sha256()
-    with open(filename, 'rb') as f:
-        for block in iter(lambda: f.read(block_size), b''):
-            sha256.update(block)
-    return sha256.hexdigest()
+	sha256 = hashlib.sha256()
+	try:
+		if stat.S_ISLNK(os.stat(filename).st_mode):
+			return None
+		elif stat.S_ISFIFO(os.stat(filename).st_mode):
+			return None
+		elif stat.S_ISSOCK(os.stat(filename).st_mode):
+			return None
+	except OSError:
+		return None
+	try:
+		with open(filename, 'rb') as f:
+			for block in iter(lambda: f.read(block_size), b''):
+				sha256.update(block)
+		return sha256.hexdigest()
+	except IOError:
+		print ("Could not read file:" + filename)
 
-def discover():
-    for dirName, subdirList, fileList in os.walk("/home/chirality/testing", topdown=False):
-        for filename in fileList:
-            full_path = os.path.join(dirName, filename)
-            file_extension = str.upper(os.path.splitext(full_path)[1][1:])
+def dict_compare(d1, d2):
+	d1_keys = set(d1.keys())
+	d2_keys = set(d2.keys())
+	intersect_keys = d1_keys.intersection(d2_keys)
+	added = d1_keys - d2_keys
+	removed = d2_keys - d1_keys
+	modified = {o : (d1[o], d2[o]) for o in intersect_keys if d1[o] != d2[o]}
+	same = set(o for o in intersect_keys if d1[o] == d2[o])
+	return added, removed, modified, same
 
-            process_file = True
-            argsNew = True
-            argsBaseline = False
-            if process_file:
-                file_hash = sha256_checksum(full_path)
+def compare(directory):
+	dir_db = json.load(open(d.split("/")[-1] + ".db"))
+	temp_db = discover(directory)
+	added, removed, modified, same = dict_compare(temp_db, dir_db)
+	if added:
+		for new_file in added:
+			log(NEWFILE, new_file)
+	if removed:
+		for rm_file in removed:
+			log(RMFILE, rm_file)
+	if modified:
+		for md_file in modified:
+			log(MDFILE, md_file)
+	json.dump(temp_db, open(directory.split("/")[-1] + ".db", "w+"))
 
-                file_info = dict()
-                file_info["path"] = full_path
-                file_info["sha256"] = file_hash
+def discover(directory):
+	file_dict = {}
+	for root, dirs, files in os.walk(directory):
+		for filename in files:
+			path = os.path.join(root, filename)
+			file_dict[path] = sha256_checksum(path)
+	return file_dict
 
-                status = FILE_UNKNOWN
+dirs = ["/home/chirality/testing", "/tmp"]
 
-                if status == FILE_UNKNOWN:
-                    print file_info
+# Grab initial baseline 
+for d in dirs:
+	files = discover(d)
+	json.dump(files, open(d.split("/")[-1] + ".db", "w+"))
 
-                elif status == FILE_KNOWN_TOUCHED:
-                    if not args.baseline:
-                        print file_info #FILE_KNOWN_TOUCHED
-
-                elif status == FILE_KNOWN_UNTOUCHED:
-                    pass
-
-discover()
+while True:
+	sleep(60)
+	for d in dirs:
+		compare(d)
