@@ -33,9 +33,9 @@ def sha256_checksum(filename, block_size=65536):
 	except OSError:
 		return None
 	try:
-		with open(filename, 'rb') as f:
-			for block in iter(lambda: f.read(block_size), b''):
-				sha256.update(block)
+		f = open(filename, 'rb')
+		for block in iter(lambda: f.read(block_size), b''):
+			sha256.update(block)
 		return sha256.hexdigest()
 	except IOError:
 		print ("Could not read file:" + filename)
