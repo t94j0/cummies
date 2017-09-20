@@ -3,11 +3,15 @@
 import os, stat
 import json
 import hashlib
+import difflib
+import subprocess
 from time import sleep, ctime
 
 NEWFILE = " [File Created] "
 RMFILE  = " [File Removed] "
-MDFILE  = " [File Modified] "
+CHFILE  = " [File Changed] "
+NETMOD  = " [Net Modified] "
+ss_db = None
 
 def log(action, filename):
 	if action == RMFILE:
@@ -40,25 +44,25 @@ def dict_compare(d1, d2):
 	intersect_keys = d1_keys.intersection(d2_keys)
 	added = d1_keys - d2_keys
 	removed = d2_keys - d1_keys
-	modified = dict()
+	changed = dict()
 	for o in intersect_keys:
 		if d1[o] != d2[o]:
-			modified[o] = (d1[o], d2[o])
-	return added, removed, modified
+			changed[o] = (d1[o], d2[o])
+	return added, removed, changed
 
 def compare(directory):
 	dir_db = json.load(open(d.split("/")[-1] + ".db"))
 	temp_db = discover(directory)
-	added, removed, modified = dict_compare(temp_db, dir_db)
+	added, removed, changed = dict_compare(temp_db, dir_db)
 	if added:
 		for new_file in added:
 			log(NEWFILE, new_file)
 	if removed:
 		for rm_file in removed:
 			log(RMFILE, rm_file)
-	if modified:
-		for md_file in modified:
-			log(MDFILE, md_file)
+	if changed:
+		for ch_file in changed:
+			log(CHFILE, ch_file)
 	json.dump(temp_db, open(directory.split("/")[-1] + ".db", "w+"))
 
 def discover(directory):
@@ -69,14 +73,29 @@ def discover(directory):
 			file_dict[path] = sha256_checksum(path)
 	return file_dict
 
+def ss(baseline=None):
+	global ss_db
+	if baseline is not None:
+		ss_db = subprocess.check_output("ss -tulpn", shell=True)
+	else:
+		output = subprocess.check_output("ss -tulpn", shell=True)
+		for line in output.split(os.linesep):
+			if line not in ss_db.split(os.linesep):
+				log(NETMOD, ' '.join(line.split()))
+		ss_db = output
+
+
 dirs = ["/home/chirality/testing", "/tmp"]
 
-# Grab initial baseline 
+# Grab initial baselines
 for d in dirs:
 	files = discover(d)
 	json.dump(files, open(d.split("/")[-1] + ".db", "w+"))
 
+ss(baseline=True)
+
 while True:
-	sleep(60)
+	sleep(10)
 	for d in dirs:
 		compare(d)
+	ss()
