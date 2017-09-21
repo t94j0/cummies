@@ -1,8 +1,11 @@
 #!/usr/bin/env python
 
 import os, stat
-import json
-import hashlib
+import pickle
+try:
+    from hashlib import sha1
+except ImportError:
+    from sha import sha as sha1
 import difflib
 from subprocess import PIPE, Popen
 from time import sleep, ctime
@@ -24,8 +27,8 @@ def log(action, filename):
 def read_block(f, block_size):
 	return f.read(block_size)
 
-def sha256_checksum(filename, block_size=65536):
-	sha256 = hashlib.sha256()
+def sha1_checksum(filename, block_size=65536):
+	sha_gen = sha1()
 	try:
 		if stat.S_ISLNK(os.stat(filename).st_mode):
 			return None
@@ -39,9 +42,9 @@ def sha256_checksum(filename, block_size=65536):
 		f = open(filename, 'rb')
 		buf = f.read(block_size)
 		while len(buf) > 0:
-			sha256.update(buf)
+			sha_gen.update(buf)
 			buf = f.read(block_size)
-		return sha256.hexdigest()
+		return sha_gen.hexdigest()
 	except IOError:
 		print ("Could not read file:" + filename)
 
@@ -57,8 +60,8 @@ def dict_compare(d1, d2):
 			changed[o] = (d1[o], d2[o])
 	return added, removed, changed
 
-def compare(directory):
-	dir_db = json.load(open(d.split("/")[-1] + ".db"))
+def compare_file_dict(directory):
+	dir_db = pickle.load(open(d.split("/")[-1] + ".db"))
 	temp_db = discover(directory)
 	added, removed, changed = dict_compare(temp_db, dir_db)
 	if added:
@@ -70,14 +73,14 @@ def compare(directory):
 	if changed:
 		for ch_file in changed:
 			log(CHFILE, ch_file)
-	json.dump(temp_db, open(directory.split("/")[-1] + ".db", "w+"))
+	pickle.dump(temp_db, open(directory.split("/")[-1] + ".db", "w+"))
 
 def discover(directory):
 	file_dict = {}
 	for root, dirs, files in os.walk(directory):
 		for filename in files:
 			path = os.path.join(root, filename)
-			file_dict[path] = sha256_checksum(path)
+			file_dict[path] = sha1_checksum(path)
 	return file_dict
 
 def ss(baseline=None):
@@ -98,14 +101,14 @@ dirs = ["/home/chirality/testing", "/tmp"]
 
 # Grab initial baselines
 for d in dirs:
-	files = discover(d)
-	json.dump(files, open(d.split("/")[-1] + ".db", "w+"))
+	file_dict = discover(d)
+	pickle.dump(file_dict, open(d.split("/")[-1] + ".db", "w+"))
 
 ss(baseline=True)
 
 while True:
 	sleep(10)
 	for d in dirs:
-		compare(d)
+		compare_file_dict(d)
 	ss()
 
